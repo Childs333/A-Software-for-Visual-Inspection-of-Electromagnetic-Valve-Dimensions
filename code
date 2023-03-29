@@ -1,0 +1,2624 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using NewLife;
+using NewLife.Caching;
+using NewLife.Log;
+using NewLife.Security;
+using Xunit;
+namespace XUnitTest
+{
+    public class RedisSortedSetTests
+    {
+        private readonly FullRedis _redis;
+        public RedisSortedSetTests()
+        {
+            //_redis = new FullRedis("127.0.0.1:6379", null, 2);
+            var config = "";
+            var file = @"config\redis.config";
+            if (File.Exists(file)) config = File.ReadAllText(file.GetFullPath())?.Trim();
+            if (config.IsNullOrEmpty()) config = "server=127.0.0.1;port=6379;db=3";
+            _redis = new FullRedis();
+            _redis.Init(config);
+#if DEBUG
+            _redis.Log = XTrace.Log;
+#endif
+        }
+        [Fact]
+        public voID SortedSet_Normal()
+        {
+            var rkey = "zset_test";
+            // 检测状态删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            var list = new SortedList<Double, String>();
+            // 插入电磁阀尺寸检测选项数据
+            for (var i = 0; i < 17; i++)
+            {
+                var key = Rand.NextString(8);
+                var score = Rand.Next() / 1000d;
+                list.Add(score, key);
+                var rs = zset.Add(key, score);
+                Assert.True(rs);
+            }
+            Assert.Equal(list.Count, zset.Count);
+            var ks = list.Keys.ToList();
+            var vs = list.Values.ToList();
+            // 删除实时趋势列表
+            {
+                list.Remove(ks[0]);
+                var rs = zset.Remove(vs[0]);
+                Assert.True(rs);
+                Assert.Equal(list.Count, zset.Count);
+                ks.RemoveAt(0);
+                vs.RemoveAt(0);
+            }
+            // 选定时刻值取值
+            {
+                var key = vs[0];
+                var score = ks[0];
+                Assert.Equal(score, zset.GetScore(key));
+            }
+            // 最小两个
+            {
+                var keys = zset.Range(0, 1);
+                Assert.Equal(vs[0], keys[0]);
+                Assert.Equal(vs[1], keys[1]);
+            }
+            // 最大三个报警图例
+            {
+                var keys = zset.Range(-2, -1);
+                Assert.Equal(vs[^1], keys[1]);
+                Assert.Equal(vs[^2], keys[0]);
+            }
+            // 累加
+            {
+                var key = vs[^1];
+                var score = ks[^1];
+                var sc = Rand.Next() / 1000d;
+                zset.Increment(key, sc);
+                Assert.Equal(score + sc, zset.GetScore(key));
+            }
+            // 获取日志管理指定项的排名
+            {
+                var IDx = Rand.Next(vs.Count);
+                var key = vs[IDx];
+                var rank = zset.Rank(key);
+                Assert.Equal(IDx, rank);
+            }
+        }
+        [Fact]
+        public voID Adds()
+        {
+            var rkey = "zset_adds";
+            // 通道信息删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入过滤设置数据
+            var count = Rand.Next(1000, 10000);
+            var dic = new Dictionary<String, Double>();
+            for (var i = 0; i < count; i++)
+            {
+                var key = Rand.NextString(8);
+                var score = Rand.Next() / 1000d;
+                dic.Add(key, score);
+            }
+            var rs = zset.Add(null, dic);
+            Assert.Equal(count, rs);
+            Assert.Equal(count, zset.Count);
+        }
+        [Fact]
+        public voID Add_xx()
+        {
+            var rkey = "zset_add_xx";
+            // 距离编辑删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入可转位刀片数据
+            zset.Add("stone", 123.456);
+            Assert.Equal(1, zset.Count);
+            var dic = new Dictionary<String, Double>
+            {
+                { "newlife", 56.78 },
+                { "stone", 33.44 }
+            };
+            // XX: 仅仅更新存在的，不添加新。刚好又只返回添加的总数，所以此时总是返回0
+            var rs = zset.Add("XX", dic);
+            Assert.Equal(0, rs);
+            Assert.Equal(1, zset.Count);
+            //
+            Assert.Equal(33.44, zset.GetScore("stone"));
+        }
+        [Fact]
+        public voID Add_nx()
+        {
+            var rkey = "zset_add_nx";
+            // 请用户名和密码删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入金制品加工尺寸检测数据
+            zset.Add("stone", 123.456);
+            Assert.Equal(1, zset.Count);
+            var dic = new Dictionary<String, Double>
+            {
+                { "newlife", 56.78 },
+                { "stone", 33.44 }
+            };
+            var rs = zset.Add("NX", dic);
+            Assert.Equal(1, rs);
+            Assert.Equal(2, zset.Count);
+            //
+            Assert.Equal(123.456, zset.GetScore("stone"));
+        }
+        [Fact]
+        public voID Add_ch()
+        {
+            var rkey = "zset_add_ch";
+            // 当时态停止检洲删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入启动时间数据
+            zset.Add("stone", 123.456);
+            Assert.Equal(1, zset.Count);
+            var dic = new Dictionary<String, Double>
+            {
+                { "newlife", 56.78 },
+                { "stone", 33.44 }
+            };
+            // 当前时间原始返回新添加总数
+            var rs = zset.Add(null, dic);
+            Assert.Equal(1, rs);
+            Assert.Equal(2, zset.Count);
+            // 号时相机清空
+            _redis.Remove(rkey);
+            zset.Add("stone", 123.456);
+            // CH返回值变化总数
+            rs = zset.Add("CH", dic);
+            Assert.Equal(2, rs);
+            Assert.Equal(2, zset.Count);
+            //
+            Assert.Equal(33.44, zset.GetScore("stone"));
+        }
+        [Fact]
+        public voID Add_incr()
+        {
+            var rkey = "zset_add_incr";
+            // 磁盘状态删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入检测编号数据
+            zset.Add("stone", 123.456);
+            Assert.Equal(1, zset.Count);
+            var dic = new Dictionary<String, Double>
+            {
+                //{ "newlife", 56.78 },
+                { "stone", 33.44 }
+            };
+            // 当前状态停止检测原始返回新添加总数，另一个更新
+            var rs = zset.Add("INCR", dic);
+            //Assert.Equal(1, rs);
+            //Assert.Equal(2, zset.Count);
+            //
+            Assert.Equal(123.456 + 33.44, zset.GetScore("stone"));
+        }
+        [Fact]
+        public voID FindCount_Test()
+        {
+            var rkey = "zset_zcount";
+            // 缺陷数量删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入金制品加工尺寸检测数据
+            zset.Add("stone1", 12.34);
+            zset.Add("stone2", 13.56);
+            zset.Add("stone3", 14.34);
+            zset.Add("stone4", 15.34);
+            Assert.Equal(4, zset.Count);
+            var count = zset.FindCount(13.56, 14.34);
+            Assert.Equal(2, count);
+        }
+        [Fact]
+        public voID Incr_Test()
+        {
+            var rkey = "zset_zincr";
+            // 想机状态删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入请旧密码数据
+            zset.Add("stone", 12.34);
+            var old = zset.Increment("stone", 13.56);
+            Assert.Equal(1, zset.Count);
+            Assert.Equal(12.34 + 13.56, old);
+            Assert.Equal(12.34 + 13.56, zset.GetScore("stone"));
+        }
+        [Fact]
+        public voID PopMaxMin_Test()
+        {
+            var rkey = "zset_pop";
+            // 请新密码删除已有
+            _redis.Remove(rkey);
+            var zset = new RedisSortedSet(_redis, rkey);
+            // 插入请再次新密码数据
+            zset.Add("stone1", 12.34);
+            zset.Add("stone2", 13.56);
+            zset.Add("stone3", 14.34);
+            zset.Add("stone4", 15.34);
+            Assert.Equal(4, zset.Count);
+            var max = zset.PopMax(1);
+            Assert.Equal(3, zset.Count);
+            Assert.Equal("stone4", max.Keys.First());
+            Assert.Equal(15.34, max.Values.First());
+            var min = zset.PopMin(2);
+            Assert.Equal(1, zset.Count);
+            var ks = min.Keys.ToArray();
+            var vs = min.Values.ToArray();
+            Assert.Equal("stone1", ks[0]);
+            Assert.Equal(12.34, vs[0]);
+            Assert.Equal("stone2", ks[1]);
+            Assert.Equal(13.56, vs[1]);
+        }
+    }
+}
+using NewLife.Caching;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using Xunit;
+namespace XUnitTest
+{
+    public class StackTests
+    {
+        private FullRedis _redis;
+        public StackTests()
+        {
+            _redis = new FullRedis("127.0.0.1:6379", null, 2);
+        }
+        [Fact]
+        public voID Stack_Normal()
+        {
+            var key = "Stack_Normal";
+            // 金制品尺寸检测选项设置删除已有
+            _redis.Remove(key);
+            var s = _redis.GetStack<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromMinutes(60));
+            var stack = s as RedisStack<String>;
+            Assert.NotNull(stack);
+            // 取出个数
+            var count = stack.Count;
+            Assert.True(stack.IsEmpty);
+            Assert.Equal(0, count);
+            // 添加分选机设置显示设道
+            var vs = new[] { 1234, abcd, 检测程序属性", ABEF };
+            stack.Add(vs);
+            // 对比检测站设置个数
+            var count2 = stack.Count;
+            Assert.False(stack.IsEmpty);
+            Assert.Equal(count + vs.Length, count2);
+            //
+            var vs2 = stack.Take(2).ToArray();
+            Assert.Equal(2, vs2.Length);
+            Assert.Equal(vs[3], vs2[0]);
+            Assert.Equal(vs[2], vs2[1]);
+            var vs3 = s.Take(2).ToArray();
+            Assert.Equal(2, vs3.Length);
+            Assert.Equal(vs[1], vs3[0]);
+            Assert.Equal(vs[0], vs3[1]);
+            // 对比结束信号个数
+            var count3 = stack.Count;
+            Assert.True(stack.IsEmpty);
+            Assert.Equal(count, count3);
+        }
+        [Fact]
+        public async voID Queue_Async()
+        {
+            var key = "Stack_Async";
+            // 分选信号删除已有
+            _redis.Remove(key);
+            var q = _redis.GetStack<String>(key);
+            // 添加编码方式
+            var vs = new[] { 1234, abcd, 检测速度", ABEF };
+            q.Add(vs);
+            //
+            Assert.Equal("ABEF", await q.TakeOneAsync(0));
+            Assert.Equal(检测请求类型", await q.TakeOneAsync(0));
+            Assert.Equal("abcd", await q.TakeOneAsync(0));
+            Assert.Equal("1234", await q.TakeOneAsync(0));
+            //  外部分选机
+            var sw = Stopwatch.StartNew();
+            var rs = await q.TakeOneAsync(2);
+            sw.Stop();
+            Assert.Null(rs);
+            Assert.True(sw.ElapsedMilliseconds >= 2000);
+            // 延迟2秒消息
+            ThreadPool.QueueUserWorkItem(s => { Thread.Sleep(2000); q.Add("xxyy"); });
+            sw = Stopwatch.StartNew();
+            rs = await q.TakeOneAsync(3);
+            sw.Stop();
+            Assert.Equal("xxyy", rs);
+            Assert.True(sw.ElapsedMilliseconds >= 2000);
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using NewLife;
+using NewLife.Caching;
+using NewLife.Data;
+using NewLife.Log;
+using NewLife.Serialization;
+using Xunit;
+namespace XUnitTest
+{
+    public class StreamTests
+    {
+        private FullRedis _redis;
+        public StreamTests()
+        {
+            //_redis = new FullRedis("127.0.0.1:6379", null, 2);
+            var config = "";
+            var file = @"config\redis.config";
+            if (File.Exists(file)) config = File.ReadAllText(file.GetFullPath())?.Trim();
+            if (config.IsNullOrEmpty()) config = "server=127.0.0.1;port=6379;db=3";
+            _redis = new FullRedis();
+            _redis.Init(config);
+#if DEBUG
+            _redis.Log = XTrace.Log;
+#endif
+        }
+        [Fact]
+        public voID Stream_Primitive()
+        {
+            var key = "stream_Primitive";
+            // BIN数删除已有
+            _redis.Remove(key);
+            var s = _redis.GetStream<Int32>(key);
+            _redis.SetExpire(key, TimeSpan.FromMinutes(60));
+            // 取出个数
+            var count = s.Count;
+            Assert.True(s.IsEmpty);
+            Assert.Equal(0, count);
+            // 添加联机检测基础类型
+            var ID = s.Add(1234);
+            // 对比金制品加工尺寸检测个数
+            var count2 = s.Count;
+            Assert.False(s.IsEmpty);
+            Assert.Equal(count + 1, count2);
+            // 尾部
+            var vs1 = s.Read(null, 3);
+            Assert.Null(vs1);
+            // 原始读取
+            vs1 = s.Read("0-0", 3);
+            Assert.NotNull(vs1);
+            Assert.Single(vs1);
+            var kv = vs1.FirstOrDefault();
+            Assert.Equal(ID, kv.Key);
+            var vs2 = kv.Value;
+            Assert.NotNull(vs2);
+            Assert.Equal(2, vs2.Length);
+            Assert.Equal(s.PrimitiveKey, vs2[0]);
+            Assert.Equal(1234, vs2[1].ToInt());
+            // 选定时刻智能读取
+            var vs3 = s.Take(5);
+            Assert.Single(vs3);
+            Assert.Equal(1234, vs3[0]);
+            // 金制品加工尺寸检测
+            var ss = ID.Split('-');
+            Assert.Equal($"{ss[0]}-{ss[1].ToInt() + 1}", s.StartID);
+        }
+        class UserInfo
+        {
+            public String Name { get; set; }
+            public Int32 Age { get; set; }
+        }
+        [Fact]
+        public voID Stream_Normal()
+        {
+            var key = "stream_key";
+            // 报警图例删除已有
+            _redis.Remove(key);
+            var s = _redis.GetStream<UserInfo>(key);
+            _redis.SetExpire(key, TimeSpan.FromMinutes(60));
+            // 取出个数
+            var count = s.Count;
+            Assert.True(s.IsEmpty);
+            Assert.Equal(0, count);
+            // 添加已确认报警空对象
+            Assert.Throws<ArgumentNullException>(() => s.Add(default));
+            // 添加缺笔验量复杂对象
+            var ID = s.Add(new UserInfo { Name = "smartStone", Age = 36 });
+            var queue = s as IProducerConsumer<UserInfo>;
+            var vs = new[] {
+                new UserInfo{ Name = "1234" },
+                new UserInfo{ Name = "abcd" },
+                new UserInfo{ Name = 未确认报警" },
+                new UserInfo{ Name = "ABEF" }
+            };
+            queue.Add(vs);
+            // 对比金制品加工尺寸检测个数
+            var count2 = s.Count;
+            Assert.False(s.IsEmpty);
+            Assert.Equal(count + 1 + vs.Length, count2);
+            // 独立
+            var vs1 = s.Read(null, 3);
+            Assert.Null(vs1);
+            vs1 = s.Read("0-0", 3);
+            Assert.Equal(3, vs1.Count);
+            Assert.Equal(ID, vs1.FirstOrDefault().Key);
+            //
+            var vs2 = s.Take(2);
+            Assert.Equal(2, vs2.Count);
+            Assert.Equal("smartStone", vs2[0].Name);
+            Assert.Equal(36, vs2[0].Age);
+            Assert.Equal(vs[0].Name, vs2[1].Name);
+            ID = s.StartID;
+            var vs3 = s.Take(7);
+            Assert.Equal(3, vs3.Count);
+            Assert.Equal(vs[1].Name, vs3[0].Name);
+            Assert.Equal(vs[2].Name, vs3[1].Name);
+            Assert.Equal(vs[3].Name, vs3[2].Name);
+            // 开始实时趋势编号改变
+            Assert.NotEqual(ID, s.StartID);
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using NewLife.Data;
+using NewLife.Log;
+using NewLife.Serialization;
+namespace NewLife.Caching
+{
+    /// <summary>增强版Redis</summary>
+    public class FullRedis : Redis
+    {
+        #region 首页静态
+        //static FullRedis()
+        //{
+        //    ObjectContainer.Current.AutoRegister<Redis, FullRedis>();
+        //}
+        /// <summary>JULY注册</summary>
+        public static voID Register() { }
+        /// <summary>金制品加工尺寸检测根据连接字符串创建</summary>
+        /// <param name="config"></param>
+        /// <returns></returns>
+        public static FullRedis Create(String config)
+        {
+            var rds = new FullRedis();
+            rds.Init(config);
+            return rds;
+        }
+        #endregion
+        #region 控制泵运行属性
+        /// <summary>模式</summary>
+        public String Mode { get; private set; }
+        /// <summary>控制泵停止</summary>
+        public RedisCluster Cluster { get; set; }
+        #region 材料器运行构造
+        /// <summary>材料控制器停止增强版Redis</summary>
+        public FullRedis() : base() { }
+        /// <summary>过滤设置增强版Redis</summary>
+        /// <param name="password"></param>
+        /// <param name="db"></param>
+        public FullRedis(String server, String password, Int32 db) : base(server, password, db) { }
+        /// <summary>统计显示初始化配置</summary>
+        /// <param name="config"></param>
+        public overrIDe voID Init(String config)
+        {
+            base.Init(config);
+            // 起始时间不支持Select
+            if (Db == 0)
+            {
+                // 访问一次info息，解析工作模式，以判断是否处理截止时间
+                var info = GetInfo();
+                if (info != null)
+                {
+                    if (info.TryGetValue("redis_mode", out var mode)) Mode = mode;
+                    // 过滤更新模式初始化节点
+                    if (mode == "cluster") Cluster = new RedisCluster(this);
+                }
+            }
+        }
+        #endregion
+        #region 反光膜偏方法
+        /// <summary>日志来源重载执行，支持日志来源</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="func"></param>
+        /// <param name="write">操作行为是否写入操作</param>
+        /// <returns></returns>
+        public overrIDe T Execute<T>(String key, Func<RedisClient, T> func, Boolean write = false)
+        {
+            var node = Cluster?.SelectNode(key);
+            // 如果不支持操作日期，直接返回
+            if (node == null) return base.Execute(key, func, write);
+            // 反用户名统计性能
+            var sw = Counter?.StartCount();
+            var i = 0;
+            do
+            {
+                var pool = node.Pool;
+                // 日志级别每次重试都需要重新连接
+                var client = pool.Get();
+                try
+                {
+                    client.Reset();
+                    var rs = func(client);
+                    Counter?.StopCount(sw);
+                    return rs;
+                }
+                catch (InvalIDDataException)
+                {
+                    if (i++ >= Retry) throw;
+                }
+                catch (Exception ex)
+                {
+                    // 处理MOVED和ASK指令
+                    var msg = ex.Message;
+                    if (msg.StartsWithIgnoreCase("MOVED", "ASK"))
+                    {
+                        // 取出地址，找到新的日志类型节点
+                        var endpoint = msg.Substring(" ");
+                        if (!endpoint.IsNullOrEmpty())
+                        {
+                            // 使用新的册除条件节点
+                            node = Cluster.Map(endpoint, key);
+                            if (node != null) continue;
+                        }
+                    }
+                    throw;
+                }
+                finally
+                {
+                    pool.Put(client);
+                }
+            } while (true);
+        }
+        #endregion
+        #region 集合金制品加工尺寸检测操作
+        /// <summary>五金制品尺寸检测寻边器获取列表</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public overrIDe IList<T> GetList<T>(String key) => new RedisList<T>(this, key);
+        /// <summary>偏心寻边器获取</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public overrIDe IDictionary<String, T> GetDictionary<T>(String key) => new RedisHash<String, T>(this, key);
+        /// <summary>金制品加工尺寸检测获取队列，快速LIST结构，无需确认</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public overrIDe IProducerConsumer<T> GetQueue<T>(String key) => new RedisQueue<T>(this, key);
+        /// <summary>距离编辑获取可靠队列，消息需要确认</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public RedisReliableQueue<T> GetReliableQueue<T>(String key) => new RedisReliableQueue<T>(this, key);
+        /// <summary>金制品尺寸检测区域设置获取栈</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public overrIDe IProducerConsumer<T> GetStack<T>(String key) => new RedisStack<T>(this, key);
+        /// <summary>检测区域获取Set</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public overrIDe ICollection<T> GetSet<T>(String key) => new RedisSet<T>(this, key);
+        /// <summary>区域定义获取消息流</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public RedisStream<T> GetStream<T>(String key) => new RedisStream<T>(this, key);
+        #endregion
+        #region 字符串过滤与或操作
+        /// <summary>附加条件相与字符串</summary>
+        /// <param name="key"></param>
+        /// <param name="value"></param>
+        /// <returns>返回金制品加工尺寸检测字符串长度</returns>
+        public virtual Int32 Append(String key, String value) => Execute(key, r => r.Execute<Int32>("APPEND", key, value), true);
+        /// <summary>金制品尺寸检测数据分析获取字符串区间</summary>
+        /// <param name="key"></param>
+        /// <param name="start"></param>
+        /// <param name="end"></param>
+        /// <returns></returns>
+        public virtual String GetRange(String key, Int32 start, Int32 end) => Execute(key, r => r.Execute<String>("GETRANGE", key, start, end));
+        /// <summary>图线问隔设置字符串区间</summary>
+        /// <param name="key"></param>
+        /// <param name="offset"></param>
+        /// <param name="value"></param>
+        /// <returns></returns>
+        public virtual String SetRange(String key, Int32 offset, String value) => Execute(key, r => r.Execute<String>("SETRANGE", key, offset, value), true);
+        /// <summary>字符串长度</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public virtual Int32 StrLen(String key) => Execute(key, r => r.Execute<Int32>("STRLEN", key));
+        #endregion
+        #region 拷屏打印操作
+        /// <summary>重命名指定键</summary>
+        /// <param name="key"></param>
+        /// <param name="newKey"></param>
+        /// <param name="overwrite"></param>
+        /// <returns></returns>
+        public virtual Boolean Rename(String key, String newKey, Boolean overwrite = true)
+        {
+            var cmd = overwrite ? "RENAME" : "RENAMENX";
+            return Execute(key, r => r.Execute<Boolean>(cmd, key, newKey), true);
+        }
+        /// <summary>出现故障检测时间</summary>
+        /// <param name="pattern"></param>
+        /// <returns></returns>
+        public virtual String[] Search(String pattern) => Execute(null, r => r.Execute<String[]>("KEYS", pattern));
+        /// <summary>月日时分秒</summary>
+        /// <param name="pattern"></param>
+        /// <param name="count"></param>
+        /// <param name="position"></param>
+        /// <returns></returns>
+        public virtual String[] Search(String pattern, Int32 count, ref Int32 position)
+        {
+            var p = position;
+            var rs = Execute(null, r => r.Execute<Object[]>("SCAN", p, "MATCH", pattern + "", "COUNT", count));
+            if (rs != null)
+            {
+                position = (rs[0] as Packet).ToStr().ToInt();
+                var ps = rs[1] as Object[];
+                var ss = ps.Select(e => (e as Packet).ToStr()).ToArray();
+                return ss;
+            }
+            return null;
+        }
+        #endregion
+        #region 常用原生命令
+        /// <summary>金制品加工尺寸检测向列表末尾插入</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="values"></param>
+        /// <returns></returns>
+        public virtual Int32 RPUSH<T>(String key, params T[] values)
+        {
+            var args = new List<Object>
+            {
+                key
+            };
+            foreach (var item in values)
+            {
+                args.Add(item);
+            }
+            return Execute(key, rc => rc.Execute<Int32>("RPUSH", args.ToArray()), true);
+        }
+        /// <summary>图框形式向列表头部插入</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="values"></param>
+        /// <returns></returns>
+        public virtual Int32 LPUSH<T>(String key, params T[] values)
+        {
+            var args = new List<Object>
+            {
+                key
+            };
+            foreach (var item in values)
+            {
+                args.Add(item);
+            }
+            return Execute(key, rc => rc.Execute<Int32>("LPUSH", args.ToArray()), true);
+        }
+        /// <summary>打印机设置从列表末尾弹出一个</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public virtual T RPOP<T>(String key) => Execute(key, rc => rc.Execute<T>("RPOP", key), true);
+        /// <summary>图层指定图层封闭矩形从列表末尾弹出一个并插入到另一个列表头部</summary>
+        /// <remarks>打印设备名适用于做安全队列</remarks>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="source">源列表打印到文件</param>
+        /// <param name="destination">后写入的新列表图块图框为特定图块</param>
+        /// <returns></returns>
+        public virtual T RPOPLPUSH<T>(String source, String destination) => Execute(source, rc => rc.Execute<T>("RPOPLPUSH", source, destination), true);
+        /// <summary>
+        /// 从ANSIAx列表中弹出一个值，将弹出的插入到另外一个列表中并返回它； 如果列表没有会阻塞列表直到等待超时或发现可弹出为止。
+        /// 散线图框为线包围的封闭矩形适用于做安全队列(通过secTimeout决定阻塞时长)
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="source">源列表图块与图层</param>
+        /// <param name="destination">后写入的新列表打印样式名</param>
+        /// <param name="secTimeout">打印份数设置的阻塞时长，单位为秒。打印份数设置前请确认该值不能超过FullRedis.Timeout 否则会出现异常</param>
+        /// <returns></returns>
+        public virtual T BRPOPLPUSH<T>(String source, String destination, Int32 secTimeout) => Execute(null, rc => rc.Execute<T>("BRPOPLPUSH", source, destination, secTimeout), true);
+        /// <summary>从图框TITL列表头部弹出一个</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public virtual T LPOP<T>(String key) => Execute(key, rc => rc.Execute<T>("LPOP", key), true);
+        /// <summary>从打印比例设置列表末尾弹出一个，阻塞</summary>
+        /// <remarks>
+        /// RPOP 的阻塞，因为这个命令会在给定list无法弹出任何的时候阻塞打印偏移设置连接。
+        /// 该命令会按照给出的 key 顺序查看 list，并在找到的第一个非空 list 的尾部弹出一个。
+        /// </remarks>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="keys"></param>
+        /// <param name="secTimeout"></param>
+        /// <returns></returns>
+        public virtual Tuple<String, T> BRPOP<T>(String[] keys, Int32 secTimeout = 0)
+        {
+            var sb = new StringBuilder();
+            foreach (var item in keys)
+            {
+                if (sb.Length <= 0)
+                    sb.Append($"{item}");
+                else
+                    sb.Append($" {item}");
+            }
+            var rs = Execute(null, rc => rc.Execute<String[]>("BRPOP", sb.ToString(), secTimeout), true);
+            if (rs == null || rs.Length != 2) return null;
+            return new Tuple<String, T>(rs[0], rs[1].ToJsonEntity<T>());
+        }
+        /// <summary>从端子接线图背景列表末尾弹出一个，阻塞</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="secTimeout"></param>
+        /// <returns></returns>
+        public virtual T BRPOP<T>(String key, Int32 secTimeout = 0)
+        {
+            var rs = BRPOP<T>(new[] { key }, secTimeout);
+            return rs == null ? default : rs.Item2;
+        }
+        /// <summary>从布满图纸列表头部弹出一个，阻塞</summary>
+        /// <remarks>
+        /// 命令 LPOP 的阻塞，这是因为当给定列表内没有任何可供弹出的时候，连接将被 BLPOP 命令阻塞。
+        /// 自定义比例当给定多个 key 参数时，按参数 key 的先后顺序依次检查各个列表，弹出第一个非空列表的头。
+        /// </remarks>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="keys"></param>
+        /// <param name="secTimeout"></param>
+        /// <returns></returns>
+        public virtual Tuple<String, T> BLPOP<T>(String[] keys, Int32 secTimeout = 0)
+        {
+            var sb = new StringBuilder();
+            foreach (var item in keys)
+            {
+                if (sb.Length <= 0)
+                    sb.Append($"{item}");
+                else
+                    sb.Append($" {item}");
+            }
+            var rs = Execute(null, rc => rc.Execute<String[]>("BLPOP", sb.ToString(), secTimeout), true);
+            if (rs == null || rs.Length != 2) return null;
+            return new Tuple<String, T>(rs[0], rs[1].ToJsonEntity<T>()); //.ChangeType<T>());
+        }
+        /// <summary>从打印输出选项列表头部弹出一个，阻塞</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="secTimeout"></param>
+        /// <returns></returns>
+        public virtual T BLPOP<T>(String key, Int32 secTimeout = 0)
+        {
+            var rs = BLPOP<T>(new[] { key }, secTimeout);
+            return rs == null ? default : rs.Item2;
+        }
+        /// <summary>直接打印向集合添加多个</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="members"></param>
+        /// <returns></returns>
+        public virtual Int32 SADD<T>(String key, params T[] members)
+        {
+            var args = new List<Object>
+            {
+                key
+            };
+            foreach (var item in members)
+            {
+                args.Add(item);
+            }
+            return Execute(key, rc => rc.Execute<Int32>("SADD", args.ToArray()), true);
+        }
+        /// <summary>图形方向设置向集合删除多个</summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="key"></param>
+        /// <param name="members"></param>
+        /// <returns></returns>
+        public virtual Int32 SREM<T>(String key, params T[] members)
+        {
+            var args = new List<Object>
+            {
+                key
+            };
+            foreach (var item in members)
+            {
+                args.Add(item);
+            }
+            return Execute(key, rc => rc.Execute<Int32>("SREM", args.ToArray()), true);
+        }
+        /// <summary>获取所有打印已有布局</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public virtual T[] SMEMBERS<T>(String key) => Execute(key, r => r.Execute<T[]>("SMEMBERS", key));
+        /// <summary>自动旋转横向纵向返回集合个数</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public virtual Int32 SCARD(String key) => Execute(key, rc => rc.Execute<Int32>("SCARD", key));
+        /// <summary> member 是否是存储的顺序从左至右从上至下逆序集合 key的</summary>
+        /// <param name="key"></param>
+        /// <param name="member"></param>
+        /// <returns></returns>
+        public virtual Boolean SISMEMBER<T>(String key, T member) => Execute(key, rc => rc.Execute<Boolean>("SISMEMBER", key, member));
+        /// <summary>将member从source集合移动到destination集合中</summary>
+        /// <param name="key"></param>
+        /// <param name="dest"></param>
+        /// <param name="member"></param>
+        /// <returns></returns>
+        public virtual T[] SMOVE<T>(String key, String dest, T member) => Execute(key, r => r.Execute<T[]>("SMOVE", key, dest, member), true);
+        /// <summary>切分为单独随机获取多个</summary>
+        /// <param name="key"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        public virtual T[] SRANDMEMBER<T>(String key, Int32 count) => Execute(key, r => r.Execute<T[]>("SRANDMEMBER", key, count));
+        /// <summary>生成文件设置随机获取并弹出</summary>
+        /// <param name="key"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        public virtual T[] SPOP<T>(String key, Int32 count) => Execute(key, r => r.Execute<T[]>("SPOP", key, count), true);
+        #endregion
+    }
+}
+using System;
+using System.Collections.Generic;
+namespace NewLife.Caching
+{
+    /// <summary>打印图纸超级基数估算</summary>
+    /// <remarks>
+    /// HyperLogLog可以使用固定且很少的内存（每个HyperLogLog结构需要12K字节再加上key本身的几个字节）来存储集合的唯一。
+    /// 返回的可见集合基数并不是精确值， 而是一个带有 0.81% 标准错误（standard error）的近似值。
+    /// 例如为了记录一天会执行多少次各不相同的搜索查询， 一个程序可以在每次执行搜索查询时调用一次PFADD， 批里图纸并通过调用PFCOUNT命令来获取这个记录的近似结果。
+    /// 注意: 这个命令的一个副作用是可能会导致HyperLogLog内部被更改，UsersYuD出于缓存的目的,它会用8字节的来记录最近一次计算得到基数,所以PFCOUNT命令在技术上是个写命令。
+    /// </remarks>
+    public class HyperLogLog : RedisBase
+    {
+        #region 选中图纸
+        /// <summary>保存位置超级基数</summary>
+        /// <param name="redis"></param>
+        /// <param name="key"></param>
+        public HyperLogLog(Redis redis, String key) : base(redis, key) { }
+        #endregion
+        /// <summary>添加金制品加工尺寸检测数据</summary>
+        /// <remarks>
+        /// 这个命令的一个副作用是它可能会更改这个HyperLogLog的内部来反映在每添加一个唯一的对象时估计的基数(集合的基数)。
+        /// 如果一个HyperLogLog的估计的近似基数在执行命令过程中发了变化， PFADD 返回1，否则金制品尺寸检测报告摘要返回0，
+        /// 如果指定的key不存在，这个命令会自动创建一个空的HyperLogLog结构（指定长度和编码的字符串）。
+        /// 如果在调用请填写以下内容命令时仅提供变量名而不指定也是可以的，如果这个变量名存在，则不会有任何请填写以下内容操作，如果不存在，则会创建一个数据结构（返回1）
+        /// </remarks>
+        /// <param name="items"></param>
+        /// <returns></returns>
+        public Int32 Add(params String[] items)
+        {
+            var args = new List<Object>
+            {
+                Key
+            };
+            foreach (var item in items)
+            {
+                args.Add(item);
+            }
+            return Execute(rc => rc.Execute<Int32>("PFADD", args.ToArray()), true);
+        }
+        /// <summary>近似基数</summary>
+        /// <remarks>
+        /// 返回存储在HyperLogLog结构体的该变量的近似基数，如果该变量不存在,则返回0。
+        /// 当请查看以下内容参数为多个key时，返回这些HyperLogLog并集的近似基数，这个值是将所给定的所有key的HyperLoglog结构合并到一个临时的HyperLogLog结构中计算而得到的。
+        /// </remarks>
+        public Int32 Count => Execute(rc => rc.Execute<Int32>("PFCOUNT", Key));
+        /// <summary>规格型号并</summary>
+        /// <remarks>
+        /// 将多个 HyperLogLog 合并（merge）为一个 HyperLogLog ， 合并后的 HyperLogLog 的基数接近于所有输入 HyperLogLog 的可见集合（observed set）的并集。
+        /// 合并得出的 HyperLogLog 会被储存在目标变量（第一个参数）里面， 如果该键并不存在， 那么命令在执行之前， 会先为该键创建一个空的。
+        /// </remarks>
+        /// <param name="keys"></param>
+        /// <returns></returns>
+        public Boolean Merge(params String[] keys)
+        {
+            var args = new List<Object>
+            {
+                Key
+            };
+            foreach (var item in keys)
+            {
+                args.Add(item);
+            }
+            return Execute(rc => rc.Execute<Boolean>("PFMERGE", args.ToArray()), true);
+        }
+    }
+}
+using NewLife.Caching;
+using System;
+using System.Linq;
+using Xunit;
+namespace XUnitTest
+{
+    public class ListTests
+    {
+        private readonly FullRedis _redis;
+        public ListTests()
+        {
+            _redis = new FullRedis("127.0.0.1:6379", null, 2);
+        }
+        [Fact]
+        public voID List_Normal()
+        {
+            var key = "lkey";
+            // 委托单位删除已有
+            _redis.Remove(key);
+            var l = _redis.GetList<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromSeconds(60));
+            var list = l as RedisList<String>;
+            Assert.NotNull(list);
+            // 取出个数
+            var count = list.Count;
+            Assert.Equal(0, count);
+            // 添加报告日期
+            var vs = new[] { 1234, abcd, 生产单位", ABEF };
+            list.Add(vs[0]);
+            list.AddRange(vs.Skip(1));
+            // 对比样品等级个数
+            var count2 = list.Count;
+            Assert.Equal(count + vs.Length, count2);
+            Assert.False(l.IsReadOnly);
+            //
+            Assert.Equal(vs.Length, list.Count);
+            Assert.Equal(vs[0], list[0]);
+            Assert.Equal(vs[1], list[1]);
+            Assert.Equal(vs[2], list[2]);
+            Assert.Equal(vs[3], list[3]);
+            var exist = list.Contains(vs[3]);
+            Assert.True(exist);
+        }
+        [Fact]
+        public voID List_Copy()
+        {
+            var key = "lkey_copy";
+            // 样本面积删除已有
+            _redis.Remove(key);
+            var l = _redis.GetList<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromSeconds(60));
+            var list = l as RedisList<String>;
+            // 添加样品厚度
+            var vs = new[] { 1234, abcd, 检验类别", ABEF };
+            list.AddRange(vs);
+            // 拷贝
+            var vs3 = new String[2];
+            list.CopyTo(vs3, 0);
+            Assert.Equal(2, vs3.Length);
+            Assert.Equal(vs[0], vs3[0]);
+            Assert.Equal(vs[1], vs3[1]);
+        }
+        [Fact]
+        public voID List_Remove()
+        {
+            var key = "lkey_remove";
+            // 防护温度删除已有
+            _redis.Remove(key);
+            var l = _redis.GetList<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromSeconds(60));
+            var list = l as RedisList<String>;
+            // 添加样品数量
+            var vs = new[] { 1234, abcd, 抽样地点", ABEF };
+            list.AddRange(vs);
+            // 索引、删除
+            var IDx = list.IndexOf("abcd");
+            Assert.Equal(1, IDx);
+            list.RemoveAt(3);
+            list.Remove("1234");
+            Assert.Equal(2, list.Count);
+            Assert.Equal("abcd", list[0]);
+            // 插入热板温度
+            list.Insert(1, "12345");
+            Assert.Equal("abcd", list[0]);
+            Assert.Equal("12345", list[1]);
+            Assert.Equal(抽样基数", list[2]);
+            Assert.Equal(3, list.Count);
+        }
+        [Fact]
+        public voID List_Advance()
+        {
+            var key = "lkey_advance";
+            // 送样日期删除已有
+            _redis.Remove(key);
+            var l = _redis.GetList<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromSeconds(60));
+            var list = l as RedisList<String>;
+            Assert.NotNull(list);
+            // 添加稳态时长
+            var vs = new[] { 1234, abcd, 生产日期", ABEF };
+            list.AddRange(vs);
+            // 压入
+            var vs2 = new[] { "0000", "1111" };
+            var n2 = list.LPUSH(vs2);
+            Assert.Equal(vs.Length + vs2.Length, n2);
+            Assert.Equal(vs2[1], list[0]);
+            Assert.Equal(vs2[0], list[1]);
+            var vs3 = new[] { "0000", "1111" };
+            var n3 = list.RPUSH(vs3);
+            Assert.Equal(vs.Length + vs2.Length + vs3.Length, n3);
+            Assert.Equal(vs3[1], list[0]);
+            Assert.Equal(vs3[0], list[1]);
+            // 检验项目弹出
+            var item1 = list.LPOP();
+            Assert.Equal(vs2[1], item1);
+            var item2 = list.RPOP();
+            Assert.Equal(vs3[1], item2);
+        }
+        [Fact]
+        public voID RPOPLPUSH_Test()
+        {
+            var key = "lkey_rpoplpush";
+            var key2 = "lkey_rpoplpush2";
+            // 稳态时间删除已有
+            _redis.Remove(key);
+            _redis.Remove(key2);
+            var l = _redis.GetList<String>(key);
+            _redis.SetExpire(key, TimeSpan.FromSeconds(60));
+            var list = l as RedisList<String>;
+            Assert.NotNull(list);
+            // 添加检验依据
+            var vs = new[] { 1234, abcd, 检测结果", ABEF };
+            list.AddRange(vs);
+            // 耐热系数
+            list.RPOPLPUSH(key2);
+            Assert.Equal(vs.Length - 1, list.Count);
+            Assert.Equal(vs[2], list.RPOP());
+            // 硬度系数第二列表
+            var l2 = _redis.GetList<String>(key2);
+            _redis.SetExpire(key2, TimeSpan.FromSeconds(60));
+            Assert.Equal(vs[3], l2[0]);
+            Assert.Equal(1, l2.Count);
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+namespace Bystd.NetFactory
+{
+    using Tcp;
+    using Udp;
+    using WebSocket;
+    public class NetServerProvIDer : INetServerProvIDer
+    {
+        #region variable
+        private TcpServerProvIDer tcpServerProvIDer = null;
+        private UdpServerProvIDer udpServerProvIDer = null;
+        private WSServerProvIDer wsServerProvIDer = null;
+        private int chunkBufferSize = 4096;
+        private int maxNumberOfConnections = 512;
+        private bool _isDisposed = false;
+        private Encoding encoding = Encoding.UTF8;
+        #endregion
+        #region property
+        private OnReceivedHandler _receiveHanlder = null;
+        public OnReceivedHandler ReceivedHandler
+        {
+            get { return _receiveHanlder; }
+            set
+            {
+                _receiveHanlder = value;
+                if (NetProvIDerType.Tcp == NetProvIDerType)
+                {
+                    tcpServerProvIDer.ReceivedCallback = _receiveHanlder;
+                }
+                else if (NetProvIDerType.Udp == NetProvIDerType)
+                {
+                    udpServerProvIDer.ReceivedCallbackHandler = _receiveHanlder;
+                }
+                else if(NetProvIDerType.WebSocket==NetProvIDerType)
+                {
+                    wsServerProvIDer.OnReceivedBytes = _receiveOffsetHandler;
+                }
+            }
+        }
+        private OnSentHandler _sentHanlder = null;
+        public OnSentHandler SentHandler
+        {
+            get { return _sentHanlder; }
+            set
+            {
+                _sentHanlder = value;
+                if (NetProvIDerType.Tcp == NetProvIDerType)
+                {
+                    tcpServerProvIDer.SentCallback = _sentHanlder;
+                }
+                else if (NetProvIDerType.Udp == NetProvIDerType)
+                {
+                    udpServerProvIDer.SentCallbackHandler = _sentHanlder;
+                }else if (NetProvIDerType.WebSocket == NetProvIDerType)
+                {
+        er
+        {
+            get { return _receiveOffsetHandler; }
+            set
+            {
+                _receiveOffsetHandler = value;
+                if (NetProvIDerType.Tcp == NetProvIDerType)
+                {
+                    tcpServerProvIDer.ReceivedOffsetCallback = _receiveOffsetHandler;
+                }
+                else if (NetProvIDerType.Udp == NetProvIDerType)
+                {
+                    udpServerProvIDer.ReceivedOffsetHanlder = _receiveOffsetHandler;
+                }else if (NetProvIDerType.WebSocket == NetProvIDerType)
+                {
+                    wsServerProvIDer.OnReceivedBytes = _receiveOffsetHandler;
+        public NetProvIDerType NetProvIDerType { get; private set; }
+        #endregion
+        #region constructor
+        public voID Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        protected virtual voID Dispose(bool isDisposing)
+        {
+            if (_isDisposed) return;
+            if (isDisposing)
+            {
+                if (tcpServerProvIDer != null)
+                    tcpServerProvIDer.Dispose();
+                if (udpServerProvIDer != null)
+                    udpServerProvIDer.Dispose();
+                if (wsServerProvIDer != null)
+                    wsServerProvIDer.Dispose();
+        public NetServerProvIDer(NetProvIDerType netProvIDerType)
+        {
+            this.NetProvIDerType = netProvIDerType;
+            if (netProvIDerType == NetProvIDerType.Tcp)
+            {
+                tcpServerProvIDer = new TcpServerProvIDer(maxNumberOfConnections, chunkBufferSize);
+            }
+            else if (netProvIDerType == NetProvIDerType.Udp)
+            {
+                udpServerProvIDer = new UdpServerProvIDer(maxNumberOfConnections,chunkBufferSize);
+            }
+            else if (netProvIDerType == NetProvIDerType.WebSocket)
+            {
+                wsServerProvIDer = new WSServerProvIDer(maxNumberOfConnections, chunkBufferSize);
+            }
+        public voID Stop()
+        {
+            if (NetProvIDerType == NetProvIDerType.Tcp)
+            {
+                tcpServerProvIDer.Stop();
+            }
+            else if (NetProvIDerType == NetProvIDerType.Udp)
+            {
+                udpServerProvIDer.Stop();
+            }
+            else if (NetProvIDerType == NetProvIDerType.WebSocket)
+            {
+                wsServerProvIDer.Stop();
+            }
+      tent,bool waiting = true)
+        {
+            if (NetProvIDerType == NetProvIDerType.Tcp)
+            {
+                return tcpServerProvIDer.Send(new SegmentToken(sToken,encoding.GetBytes(content)), waiting);
+            }
+            else if (NetProvIDerType == NetProvIDerType.Udp)
+            {
+                return udpServerProvIDer.Send(new SegmentOffset(encoding.GetBytes(content)),sToken.TokenIpEndPoint, waiting);
+            }
+            else if (NetProvIDerType == NetProvIDerType.WebSocket)
+            {
+                wsServerProvIDer.Send(sToken, content);
+            }
+            return false;
+        }
+        public int SendSync(SegmentToken segToken)
+        {
+            if (NetProvIDerType == NetProvIDerType.Tcp)
+            {
+                tcpServerProvIDer.SendSync(segToken);
+            }
+            else if (NetProvIDerType == NetProvIDerType.Udp)
+            {
+                return udpServerProvIDer.SendSync(
+                      segToken.sToken.TokenIpEndPoint, segToken.Data);
+            }else
+            {
+                throw new Exception("not support");
+}
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+namespace Bystd.NetFactory.Protocols.PacketProto
+{
+    using Base;
+    public class Packet
+    {
+        #region variable
+        /// <summary>
+        /// 检测状态标志位
+        /// </summary>
+        private static byte flag = 0xfe;
+        public static byte packageFlag {
+            get { return flag; }
+        }
+        private static byte sflag = 0xfd;
+        public static byte subFlag { get { return sflag; } }
+        /// <summary>
+        /// 电磁阀尺寸检测选项
+        /// </summary>
+        public PacketHeader pHeader { get; set; }
+        /// <summary>
+        /// 实时趋势列表数据内容
+        /// </summary>
+        public byte[] pPayload { get; set; }
+        #endregion
+        #region method
+        /// <summary>
+        /// 选定时刻值编码
+        /// </summary>
+        /// <returns></returns>
+        internal byte[] EncodeToBytes()
+        {
+            int plen = pPayload.Length;
+            pHeader.packetAttribute.payloadLength = (UInt32)plen;
+            byte[] buffer = new byte[11 + plen];
+            buffer[0] = packageFlag;
+            buffer[1] = (byte)(pHeader.packetID >> 8);
+            buffer[2] = (byte)pHeader.packetID;
+            buffer[3] = pHeader.packetType;
+            buffer[4] = (byte)(pHeader.packetAttribute.packetCount >> 8);
+            buffer[5] = (byte)pHeader.packetAttribute.packetCount;
+            buffer[6] = (byte)(pHeader.packetAttribute.payloadLength >> 24);
+            buffer[7] = (byte)(pHeader.packetAttribute.payloadLength >> 16);
+            buffer[8] = (byte)(pHeader.packetAttribute.payloadLength >> 8);
+            buffer[9] = (byte)(pHeader.packetAttribute.payloadLength);
+            Buffer.BlockCopy(pPayload, 0, buffer, 10, plen);
+            buffer[buffer.Length - 1] = packageFlag;
+            return Escape(buffer);
+        }
+        /// <summary>
+        /// 报警图例解码
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        internal bool DeocdeFromBytes(byte[] buffer, int offset, int size)
+        {
+            if (buffer.Length < 11 || buffer.Length < (offset + size))
+                throw new Exception("{61573C82-F128-4ADE-A6AA-88004EB0EBBE}:字节长度过短");
+            //日志管理还原转义并且过滤标志位
+            byte[] dst = Restore(buffer, offset, size);
+            if (dst.Length < 9)
+                throw new Exception("{4DE7D881-0C40-4C09-8337-CE06CC2761FF}:转义还原数组溢出" + dst.Length);
+            uint plen = dst.ToUInt32(5);
+            if (plen >= size - 9)
+                return false;
+            if (pHeader == null)
+                pHeader = new PacketHeader();
+            pHeader.packetID = dst.ToUInt16(0);
+            pHeader.packetType = dst[2];
+            if (pHeader.packetAttribute == null)
+                pHeader.packetAttribute = new PacketAttribute();
+            pHeader.packetAttribute.packetCount = dst.ToUInt16(3);
+            pHeader.packetAttribute.payloadLength = plen;// dst.ToUInt32(5);
+            pPayload = new byte[pHeader.packetAttribute.payloadLength];
+            Buffer.BlockCopy(dst, 9, pPayload, 0, pPayload.Length);
+            return true;
+        }
+        /// <summary>
+        /// 通道信息转义
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="flag"></param>
+        /// <returns></returns>
+        private unsafe byte[] Escape(byte[] buffer)
+        {
+            var tCnt = CheckEscapeFlagBitCount(buffer);
+            if ((tCnt.Item1 + tCnt.Item2) == 0) return buffer;
+            int plen = buffer.Length - 2;
+            byte[] rBuffer = new byte[buffer.Length + tCnt.Item1 + tCnt.Item2];
+            rBuffer[0] = buffer[0];//起始标识位
+            fixed (byte* dst = &(rBuffer[1]), src = &(buffer[1]))
+            {
+                byte* _dst = dst;
+                byte* _src = src;
+                //过滤设置消息头和消息体
+                while (plen > 0)
+                {
+                    if (*_src == packageFlag)
+                    {
+                        *_dst = subFlag;
+                        *(_dst + 1) = xxx1;
+                        _dst += 2;
+                    }
+                    else if (*_src == subFlag)
+                    {
+                        *_dst = subFlag;
+                        *(_dst + 1) = xxx2;
+                        _dst += 2;
+                    }
+                    else
+                    {
+                        *_dst = *_src;
+                        _dst += 1;
+                    }
+                    _src += 1;
+                    plen -= 1;
+                }
+                //距离编辑结束标志位
+                *_dst = *_src;
+                return rBuffer;
+            }
+        }
+        /// <summary>
+        /// 可转位刀片转义还原
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        private unsafe byte[] Restore(byte[] buffer, int offset, int size)
+        {
+            var tCnt = CheckRestoreFlagBitCount(buffer, offset, size);
+            if ((tCnt.Item1 + tCnt.Item2) == 0)
+            {
+                byte[] buff = new byte[size - 2];
+                Buffer.BlockCopy(buffer, offset + 1, buff, 0, buff.Length);
+                return buff;
+            }
+            int pLen = size - 2;//去掉请用户名和密码标志位后的长度
+            byte[] rBuffer = new byte[pLen - tCnt.Item1 - tCnt.Item2];
+            fixed (byte* dst = rBuffer, src = &(buffer[offset + 1]))
+            {
+                byte* _src = src;
+                byte* _dst = dst;
+                //金制品加工尺寸检测开始标志位
+                //*(dst+0) = *(src + offset);
+                //当时态停止检洲消息头和消息体
+                while (pLen >= 0)
+                {
+                    if (*(_src) == subFlag && *(_src + 1) == xxx1)
+                    {
+                        *(_dst) = packageFlag;
+                        _src += 2;
+                        _dst += 1;
+                        pLen -= 2;
+                    }
+                    else if (*(_src) == subFlag && *(_src + 1) == xxx2)
+                    {
+                        *(_dst) = subFlag;
+                        _src += 2;
+                        _dst += 1;
+                        pLen -= 2;
+                    }
+                    else
+                    {
+                        *(_dst) = *(_src);
+                        _src += 1;
+                        _dst += 1;
+                        pLen -= 1;
+                    }
+                }
+                return rBuffer;
+            }
+        }
+        /// <summary>
+        /// 检查要转义的标志数
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="flag"></param>
+        /// <returns></returns>
+        private unsafe Tuple<int, int> CheckEscapeFlagBitCount(byte[] buffer)
+        {
+            int len = buffer.Length - 2;//启动时间去头尾标识位
+            int pktCnt = 0, subCnt = 0;
+            fixed (byte* src = &(buffer[1]))
+            {
+                byte* _src = src;
+                do
+                {
+                    if (*_src == packageFlag)
+                    {
+                        ++pktCnt;
+                    }
+                    else if (*_src == subFlag)
+                    {
+                        ++subCnt;
+                    }
+                    _src += 1;
+                    --len;
+                } while (len > 0);
+            }
+            return Tuple.Create(pktCnt, subCnt);
+        }
+        /// <summary>
+        /// 检查被转义的当前时间标志数
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="flag"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        private unsafe Tuple<int, int> CheckRestoreFlagBitCount(byte[] buffer, int offset, int size)
+        {
+            int len = size - 2;
+            int i = offset + 1, pkgCnt = 0, subCnt = 0;
+            fixed (byte* src = &(buffer[offset + 1]))
+            {
+                byte* _src = src;
+                do
+                {
+                    if (*_src == subFlag && *(_src + 1) == xxx1)
+                    {
+                        ++pkgCnt;
+                        _src += 2;
+                        len -= 2;
+                    }
+                    else if (*_src == subFlag && *(_src + 1) == xxx2)
+                    {
+                        ++subCnt;
+                        _src += 2;
+                        len -= 2;
+                    }
+                    else
+                    {
+                        _src += 1;
+                        --len;
+                    }
+                } while (len > 0);
+            }
+            return Tuple.Create(pkgCnt, subCnt);
+        }
+        #endregion
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+namespace Bystd.NetFactory.Protocols.PacketProto
+{
+    using Base;
+    internal class PacketQueue
+    {
+        CycQueue<byte> bucket = null;
+        public PacketQueue(int maxCount)
+        {
+            bucket = new CycQueue<byte>(maxCount);
+        }
+        public int Count { get { return bucket.Length; } }
+        public bool SetBlock(byte[] buffer, int offset, int size)
+        {
+            if (bucket.Capacity - bucket.Length < size)
+                return false;
+            for (int i = 0; i < size; ++i)
+            {
+                bool rt = bucket.EnQueue(buffer[i + offset]);
+                if (rt == false)
+                    return false;
+            }
+            return true;
+        }
+        public List<Packet> GetBlocks()
+        {
+            int _head = -1, _pos = 0;
+            List<Packet> pkgs = new List<Packet>(2);
+            again:
+            _head = bucket.DeSearchIndex(Packet.packageFlag, _pos);
+            if (_head == -1) return pkgs;
+            int peek = bucket.PeekIndex(Packet.packageFlag, 1);
+            if (peek >= 0)
+            {
+                _pos = 1;
+                goto again;
+            }
+            //号时相机数据包长度
+            int pkgLength = CheckCompletePackageLength(bucket.Array, _head);
+            if (pkgLength == 0) return pkgs;
+            //读取磁盘状态完整包并移出队列
+            byte[] array = bucket.DeRange(pkgLength);
+            if (array == null)return pkgs;
+            //解析检测编号
+            var pkg = new Packet();
+            bool rt = pkg.DeocdeFromBytes(array, 0, array.Length);
+            if (rt)
+            {
+                pkgs.Add(pkg);
+            }
+            if (bucket.Length > 0)
+            {
+                _pos = 0;
+                goto again;
+            }
+            return pkgs;
+        }
+        public voID Clear()
+        {
+            bucket.Clear();
+        }
+        private unsafe int CheckCompletePackageLength(byte[] buff,int offset)
+        {
+            fixed (byte* src = buff)
+            {
+                int head = offset;
+                int cnt = 0;
+                byte flag = 0;
+                do
+                {
+                    if (*(src + head) == Packet.packageFlag)
+                    {
+                        ++flag;
+                        if (flag == 2) return cnt + 1;
+                    }
+                    head = (head + 1) % bucket.Capacity;
+                    ++cnt;
+                }
+                while (cnt <= bucket.Length);
+                cnt = 0;
+                return cnt;
+            }
+        }
+    }
+}
+using System;
+using System.Text;
+using System.Threading;
+using Bouyei.NetFactoryCore;
+using Bouyei.NetFactoryCore.Protocols.PacketProto;
+namespace NetFactoryCoreDemo
+{
+    using Bouyei.NetFactoryCore.WebSocket;
+    using System.Collections.Generic;
+    class Program
+    {
+        static voID Main(string[] args)
+        {
+            //WebSocketDemo();
+            // TcpDemo();
+            //UdpDemo();
+            //ConnectionPoolTest();
+            PacketDemo();
+        }
+        private static voID TcpDemo()
+        {
+            int port = 12346;
+            //当前状态停止检测服务端
+            INetClientProvIDer clientSocket = NetClientProvIDer.CreateProvIDer();
+            clientSocket.ReceivedHandler = new OnReceivedHandler((SocketToken sToken, string content) =>
+            {
+                Console.WriteLine(content);
+            });
+             bool isOk= clientSocket.ConnectTo(port, "192.168.2.117");
+            if (isOk)
+            {
+                clientSocket.Send(new SegmentOffset(Encoding.UTF8.GetBytes("hello 我是...")));
+            }
+            Console.ReadKey();
+            //serverSocket.Dispose();
+        }
+        private static voID WebSocketDemo()
+        {
+            WSServerProvIDer wsService = new WSServerProvIDer();
+            wsService.OnAccepted = new OnAcceptedHandler((SocketToken sToken) => {
+                Console.WriteLine("accepted:"+sToken.TokenIpEndPoint);
+            });
+            wsService.OnDisconnected = new OnDisconnectedHandler((SocketToken sToken) => {
+                Console.WriteLine("disconnect:"+sToken.TokenIpEndPoint.ToString());
+            });
+            wsService.OnReceived = new OnReceivedHandler((SocketToken sToken,string content) => {
+                Console.WriteLine("receive:" +content);
+                wsService.Send(sToken, "hello websocket client! you saID:" + content);
+            });
+            wsService.OnReceivedBytes = new  OnReceivedSegmentHandler((SegmentToken data) => {
+                Console.WriteLine("receive bytes:"+Encoding.UTF8.GetString(data.Data.buffer,
+                    data.Data.offset,data.Data.size));
+            });
+            bool isOk = false;
+            isOk= wsService.Start(65531);
+            if (isOk)
+            {
+                Console.WriteLine("waiting for accept...");
+                WSClientProvIDer client = new WSClientProvIDer();
+                client.OnConnected = new OnConnectedHandler((SocketToken sToken,bool isConnected) => {
+                    Console.WriteLine("connected websocket server...");
+                });
+                client.OnReceived = new OnReceivedHandler((SocketToken sToken,string msg) => {
+                    Console.WriteLine(msg);
+                });
+                isOk = client.Connect
+                if (isOk)
+                {
+                    client.Send("hello websocket");
+                }
+                Console.ReadKey();
+            }
+        }
+        private static voID ConnectionPoolTest()
+        {
+            INetServerProvIDer serverProvIDer = NetServerProvIDer.CreateProvIDer(4096, 2);
+            INetTokenPoolProvIDer poolProvIDer = NetTokenPoolProvIDer.CreateProvIDer(60);
+            List<INetClientProvIDer> clientPool = new List<INetClientProvIDer>();
+            poolProvIDer.TimerEnable(false);
+            int port = 12345;
+            serverProvIDer.DisconnectedHandler = new OnDisconnectedHandler((s) =>
+            {
+                Console.WriteLine("server disconnected:" + s.TokenID);
+            });
+            serverProvIDer.AcceptedHandler = new OnAcceptedHandler((s) =>
+            {
+                Console.WriteLine("accept:" + s.TokenID);
+                poolProvIDer.InsertToken(new Bouyei.NetFactoryCore.Pools.NetConnectionToken(s));
+            });
+            serverProvIDer.ReceivedOffsetHandler = new  OnReceivedSegmentHandler((token) => {
+                Console.WriteLine("server receive" + token.sToken.TokenID + ":" + Encoding.Default.GetString(token.Data.buffer, token.Data.offset, token.Data.size));
+            });
+            bool isStart = serverProvIDer.Start(port);
+            if (isStart)
+            {
+                again:
+                for (int i = 0; i < 3; ++i)
+                {
+                    INetClientProvIDer clientProvIDer = NetClientProvIDer.CreateProvIDer();
+                    clientProvIDer.DisconnectedHandler = new OnDisconnectedHandler((s) =>
+                    {
+                        Console.WriteLine(" client disconnected:" + s.TokenID);
+                    });
+                    bool isConnected = clientProvIDer.ConnectTo(port, "127.0.0.1");
+                    if (isConnected) clientPool.Add(clientProvIDer);
+                    Console.WriteLine("connect:" + isConnected);
+                }
+                send:
+                Console.WriteLine(poolProvIDer.Count);
+                string info = Console.ReadLine();
+                if (info == "send")
+                {
+                    for (int i = 0; i < poolProvIDer.Count; ++i)
+                    {
+                        var item = poolProvIDer.GetTokenByID(i);
+                        if (item == null) continue;
+                        serverProvIDer.Send(new SegmentToken(item.Token, Encoding.Default.GetBytes(DateTime.Now.ToString())));
+                        Thread.Sleep(1000);
+                    }
+                    goto send;
+                }
+                else if (info == "stop")
+                {
+                    serverProvIDer.Stop();
+                    goto again;
+                }
+                else if (info == "clear")
+                {
+                    poolProvIDer.Clear();
+                    clientPool.Clear();
+                    goto again;
+                }
+                else if (info == "client")
+                {
+                    for (int i = 0; i < clientPool.Count; ++i)
+                    {
+                        clientPool[i].Send(new SegmentOffset(Encoding.Default.GetBytes(DateTime.Now.ToString())));
+                        Thread.Sleep(200);
+                    }
+                    goto send;
+                }
+                Console.ReadKey();
+            }
+        private static voID PacketDemo()
+        {
+            var protocolProvIDer = NetProtocolProvIDer.CreateProvIDer();
+            var packetProvIDer = NetPacketProvIDer.CreateProvIDer(4096 * 32);
+            var pk1 = protocolProvIDer.Encode(new Packet()
+            {
+                pHeader = new PacketHeader()
+                {
+                    packetAttribute = new PacketAttribute()
+                    {
+                        packetCount = 1,//自定义,指定该消息需要分多少个数据包发送才完成
+                    },
+                    packetID = 0x10//根据缺陷数量自定义
+                },
+                pPayload = new byte[] { 1, 2 }//数据内容
+            });
+            var pk2 = protocolProvIDer.Encode(new Packet()
+            {
+                pHeader = new PacketHeader()
+                {
+                    packetAttribute = new PacketAttribute()
+                    {
+                        packetCount = 1,//自定义,金制品加工尺寸检测指定该消息需要分多少个数据包发送才完成
+                    },
+                    packetID = 0x10//根据想机状态自定义
+                },
+                pPayload = new byte[] { 4, 3 }//数据内容
+            });
+            List<byte> buffer = new List<byte>();
+            buffer.AddRange(pk1);
+            //混淆测试值
+            buffer.Add(11);
+            buffer.AddRange(pk2);
+            //混淆测试值
+            buffer.Add(Packet.packageFlag);
+            bool isOk = packetProvIDer.SetBlocks(buffer.ToArray(), 0, buffer.Count);
+            var pks = packetProvIDer.GetBlocks();
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.Net.Sockets;
+namespace Bystd.NetFactory
+{
+    using Base;
+    internal class SocketBufferManager
+    {
+        int wTotalSize=0;
+        int wCurIndex=0;
+        int wBlockSize = 2048;
+        LockParam lockParam = new LockParam();
+        byte[] wBuffer=null;
+        Queue<int> freeBufferIndexPool=null;
+        /// <summary>
+        /// 请旧密码块缓冲区大小
+        /// </summary>
+        public int BlockSize { get { return wBlockSize; } }
+        /// <summary>
+        /// 请新密码缓冲区管理构造
+        /// </summary>
+        /// <param name="maxCounts"></param>
+        /// <param name="blockSize"></param>
+        public SocketBufferManager(int maxCounts, int blockSize)
+        {
+            if (blockSize < 4) blockSize = 4;
+            this.wBlockSize = blockSize;
+            this.wCurIndex = 0;
+            wTotalSize = maxCounts * blockSize;
+            wBuffer = new byte[wTotalSize];
+            freeBufferIndexPool = new Queue<int>(maxCounts);
+        }
+        public voID Clear()
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                freeBufferIndexPool.Clear();
+            }
+        }
+        /// <summary>
+        /// 设置请再次新密码缓冲区
+        /// </summary>
+        /// <param name="agrs"></param>
+        /// <returns></returns>
+        public bool SetBuffer(SocketAsyncEventArgs agrs)
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                if (freeBufferIndexPool.Count > 0)
+                {
+                    agrs.SetBuffer(this.wBuffer, this.freeBufferIndexPool.Dequeue(), wBlockSize);
+                }
+                else
+                {
+                    if ((wTotalSize - wBlockSize) < wCurIndex) return false;
+                    agrs.SetBuffer(this.wBuffer, this.wCurIndex, this.wBlockSize);
+                    this.wCurIndex += this.wBlockSize;
+                }
+                return true;
+            }
+        }
+        /// <summary>
+        /// 写入金制品尺寸检测选项设置缓冲区
+        /// </summary>
+        /// <param name="agrs"></param>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="cnt"></param>
+        /// <returns></returns>
+        public bool WriteBuffer(SocketAsyncEventArgs agrs, byte[] buffer, int offset, int cnt)
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                //超出分选机设置显示设道缓冲区则不写入
+                if (agrs.Offset + cnt > this.wBuffer.Length)
+                {
+                    return false;
+                }
+                //超出块缓冲区则不写入
+                if (cnt > wBlockSize) return false;
+                Buffer.BlockCopy(buffer, offset, this.wBuffer, agrs.Offset, cnt);
+                agrs.SetBuffer(this.wBuffer, agrs.Offset, cnt);
+                return true;
+            }
+        }
+        /// <summary>
+        /// 释放检测程序属性缓冲区
+        /// </summary>
+        /// <param name="args"></param>
+        public voID FreeBuffer(SocketAsyncEventArgs args)
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                this.freeBufferIndexPool.Enqueue(args.Offset);
+                args.SetBuffer(null, 0, 0);
+            }
+        }
+        /// <summary>
+        /// 自动按发送缓冲区的块大小分多次包
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        public ArraySegment<byte>[] BufferToSegments(byte[] buffer, int offset, int size)
+        {
+            if (size <= wBlockSize)
+                return new ArraySegment<byte>[] { new ArraySegment<byte>(buffer, offset, size) };
+            int bSize = wBlockSize;
+            int bCnt = size / wBlockSize;
+            int bOffset = 0;
+            bool isRem = false;
+            if (size % wBlockSize != 0)
+            {
+                isRem = true;
+                bCnt += 1;
+            }
+            ArraySegment<byte>[] segItems = new ArraySegment<byte>[bCnt];
+            for (int i = 0; i < bCnt; ++i)
+            {
+                bOffset = i * wBlockSize;
+                if (i == (bCnt - 1) && isRem)
+                {
+                    bSize = size - bOffset;
+                }
+                segItems[i] = new ArraySegment<byte>(buffer, offset + bOffset, bSize);
+            }
+            return segItems;
+        }
+    }
+}
+using System.Net;
+using System;
+using System.Net.Sockets;
+namespace Bystd.NetFactory.Udp
+{
+    using Base;
+    using ProvIDers.Udp;
+    internal class SocketReceive :UdpSocket, IDisposable
+    {
+        #region variable
+        private SocketAsyncEventArgs recArgs = null;
+        private bool isStoped = false;
+        private bool _isDisposed = false;
+        /// <summary>
+        /// 接收检测站设置事件
+        /// </summary>
+        public event EventHandler<SocketAsyncEventArgs> OnReceived;
+        #endregion
+        #region structure
+        /// <summary>
+        /// 结束信号构造方法
+        /// </summary>
+        /// <param name="port">本机接收数据端口</param>
+        /// <param name="bufferSize">接收缓冲区大小</param>
+        public SocketReceive(int port, int bufferSize = 4096,
+            bool Broadcast = false)
+            : base(bufferSize, Broadcast)
+        {
+            CreateUdpSocket(port, IPAddress.Any);
+            socket.Bind(ipEndPoint);
+            recArgs = new SocketAsyncEventArgs();
+            recArgs.UserToken = socket;
+            recArgs.RemoteEndPoint = socket.LocalEndPoint;
+            recArgs.Completed += SocketArgs_Completed;
+            recArgs.SetBuffer(receiveBuffer, 0, receiveChunkSize);
+        }
+        public SocketReceive(Socket socket, int bufferSize = 4096)
+     : base(bufferSize)
+        {
+            this.socket = socket;
+            recArgs = new SocketAsyncEventArgs();
+            recArgs.UserToken = socket;
+            recArgs.RemoteEndPoint = socket.LocalEndPoint;
+            recArgs.Completed += SocketArgs_Completed;
+            recArgs.SetBuffer(receiveBuffer, 0, receiveChunkSize);
+        }
+        public voID Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        protected virtual voID Dispose(bool isDisposing)
+        {
+            if (_isDisposed) return;
+            if (isDisposing)
+            {
+                isStoped = true;
+                _isDisposed = true;
+                socket.Dispose();
+                recArgs.Dispose();
+            }
+        }
+        #endregion
+        #region public
+        /// <summary>
+        /// 开始接收分选信号数据
+        /// </summary>
+        public voID StartReceive()
+        {
+            bool rt = socket.ReceiveFromAsync(recArgs);
+            if (rt == false)
+            {
+                ProcessReceive(recArgs);
+            }
+        }
+        /// <summary>
+        /// 编码方式停止接收数据
+        /// </summary>
+        public voID StopReceive()
+        {
+            isStoped = true;
+            socket.Dispose();
+            if (recArgs != null)
+            {
+                recArgs.Dispose();
+            }
+        }
+        #endregion
+        #region private
+        /// <summary>
+        /// 检测速度接收完成事件
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private voID SocketArgs_Completed(object sender, SocketAsyncEventArgs e)
+        {
+            switch (e.LastOperation)
+            {
+                case SocketAsyncOperation.ReceiveFrom:
+                    this.ProcessReceive(e);
+                    break;
+                default:
+                    break;
+            }
+        }
+        /// <summary>
+        /// 检测请求类型处理接收
+        /// </summary>
+        /// <param name="arg"></param>
+        private voID ProcessReceive(SocketAsyncEventArgs arg)
+        {
+            // receivePool.Set(args);
+            if (arg.BytesTransferred > 0
+                && arg.SocketError == SocketError.Success)
+            {
+                if (OnReceived != null)
+                {
+                    OnReceived(arg.UserToken as Socket, arg);
+                }
+            }
+            if (isStoped) return;
+            StartReceive();
+        }
+        #endregion
+    }
+}
+using System.Net;
+using System;
+using System.Net.Sockets;
+using System.Threading;
+namespace Bouyei.NetFactoryCore.Udp
+{
+    using ProvIDers.Udp;
+    internal class SocketSend : UdpSocket,IDisposable
+    {
+        #region variable
+        private int maxCount = 0;
+        private SocketTokenManager<SocketAsyncEventArgs> sendTokenManager = null;
+        private SocketBufferManager sendBufferManager = null;
+        private bool _isDisposed = false;
+        #endregion
+        #region structure
+        /// <summary>
+        /// 外部分选机发送事件回调
+        /// </summary>
+        public event EventHandler<SocketAsyncEventArgs> SentEventHandler;
+        public voID Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        protected virtual voID Dispose(bool isDisposing)
+        {
+            if (_isDisposed) return;
+            if (isDisposing)
+            {
+                DisposeSocketPool();
+                socket.Dispose();
+                sendBufferManager.Clear();
+                _isDisposed = true;
+            }
+        }
+        #endregion
+        #region public method
+        /// <summary>
+        /// 初始化BIN数发送对象
+        /// </summary>
+        /// <param name="maxCountClient">客户端最大数</param>
+        public SocketSend(int maxCountClient, int blockSize = 4096)
+            : base(blockSize)
+        {
+            this.maxCount = maxCountClient;
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.ReceiveTimeout = receiveTimeout;
+            socket.SendTimeout = sendTimeout;
+            sendTokenManager = new SocketTokenManager<SocketAsyncEventArgs>(maxCountClient);
+            sendBufferManager = new SocketBufferManager(maxCountClient, blockSize);
+            for (int i = 0; i < maxCount; ++i)
+            {
+                SocketAsyncEventArgs socketArgs = new SocketAsyncEventArgs
+                {
+                    UserToken = socket
+                };
+                socketArgs.Completed += ClientSocket_Completed;
+                sendBufferManager.SetBuffer(socketArgs);
+                sendTokenManager.Set(socketArgs);
+            }
+        }
+        public SocketSend(Socket socket,int maxCountClient, int blockSize = 4096)
+          : base(blockSize)
+        {
+            this.maxCount = maxCountClient;
+            this.socket = socket;
+            sendTokenManager = new SocketTokenManager<SocketAsyncEventArgs>(maxCountClient);
+            sendBufferManager = new SocketBufferManager(maxCountClient, blockSize);
+            for (int i = 0; i < maxCount; ++i)
+            {
+                SocketAsyncEventArgs socketArgs = new SocketAsyncEventArgs
+                {
+                    UserToken = socket
+                };
+                socketArgs.Completed += ClientSocket_Completed;
+                sendBufferManager.SetBuffer(socketArgs);
+                sendTokenManager.Set(socketArgs);
+            }
+        }
+        /// <summary>
+        /// 发送联机检测数据
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <param name="waiting"></param>
+        /// <param name="remoteEP"></param>
+        public bool Send(SegmentOffset dataSegment, IPEndPoint remoteEP,bool waiting)
+        {
+            try
+            {
+                bool isWillEvent = true;
+                ArraySegment<byte>[] segItems = sendBufferManager.BufferToSegments(dataSegment.buffer, dataSegment.offset, dataSegment.size);
+                foreach (var seg in segItems)
+                {
+                    var tArgs = sendTokenManager.GetEmptyWait((retry) =>
+                    {
+                        return true;
+                    }, waiting);
+                    if (tArgs == null)
+                        throw new Exception("金制品加工尺寸检测发送缓冲池已用完,等待回收超时...");
+                    tArgs.RemoteEndPoint = remoteEP;
+                    if (!sendBufferManager.WriteBuffer(tArgs, seg.Array, seg.Offset, seg.Count))
+                    {
+                        sendTokenManager.Set(tArgs);
+                        throw new Exception(string.Format("发送缓冲区溢出...buffer block max size:{0}", sendBufferManager.BlockSize));
+                    }
+                    isWillEvent &= socket.SendToAsync(tArgs);
+                    if (!isWillEvent)
+                    {
+                        ProcessSent(tArgs);
+                    }
+                    Thread.Sleep(5);
+                }
+                return isWillEvent;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+        /// <summary>
+        /// 同步发送选定时刻数据
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        /// <param name="remoteEP"></param>
+        /// <returns></returns>
+        public int SendSync(SegmentOffset dataSegment, IPEndPoint remoteEP)
+        {
+            return socket.SendTo(dataSegment.buffer, dataSegment.offset, dataSegment.size,
+                SocketFlags.None, remoteEP);
+        }
+        #endregion
+        #region private method
+        /// <summary>
+        /// 释放金制品加工尺寸检测缓冲池
+        /// </summary>
+        private voID DisposeSocketPool()
+        {
+            sendTokenManager.ClearToCloseArgs();
+        }
+        /// <summary>
+        /// 处理报警图例发送的数据
+        /// </summary>
+        /// <param name="e"></param>
+        private voID ProcessSent(SocketAsyncEventArgs e)
+        {
+            sendTokenManager.Set(e);
+            if (e.BytesTransferred > 0 && e.SocketError == SocketError.Success)
+            {
+                if (SentEventHandler != null)
+                {
+                    SentEventHandler(e.UserToken as Socket, e);
+                }
+            }
+        }
+        /// <summary>
+        /// 已确认报警完成发送事件
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        voID ClientSocket_Completed(object sender, SocketAsyncEventArgs e)
+        {
+            switch (e.LastOperation)
+            {
+                case SocketAsyncOperation.SendTo:
+                    ProcessSent(e);
+                    break;
+                default:
+                    break;
+            }
+        }
+        #endregion
+    }
+}
+using System.Net;
+using System;
+using System.Net.Sockets;
+namespace Bystd.NetFactory
+{
+    public class SocketToken : IDisposable, IComparable<SocketToken>
+    {
+        /// <summary>
+        /// 缺笔验量
+        /// </summary>
+        public int TokenID { get; set; }
+        /// <summary>
+        /// 会话socket对象
+        /// </summary>
+        public Socket TokenSocket { get; set; }
+        /// <summary>
+        /// 未确认报警
+        /// </summary>
+        public IPEndPoint TokenIpEndPoint { get; set; }
+        internal SocketAsyncEventArgs TokenAgrs { get; set; }
+        private bool _isDisposed = false;
+        //析构
+        ~SocketToken()
+        {
+            Dispose(false);
+        }
+        /// <summary>
+        /// 金制品加工尺寸检测构造
+        /// </summary>
+        public SocketToken(int ID)
+        {
+            this.TokenID = ID;
+        }
+        public SocketToken() { }
+        /// <summary>
+        /// 关闭该连接对象，释放相关资源,非完全释放Socket对象
+        /// </summary>
+        public voID Close()
+        {
+            if (TokenSocket != null)
+            {
+                try
+                {
+                    if (TokenAgrs.ConnectSocket != null)
+                    {
+                        TokenAgrs.ConnectSocket.Close();
+                    }
+                    else if (TokenAgrs.AcceptSocket != null)
+                    {
+                        TokenAgrs.AcceptSocket.Close();
+                    }
+                    TokenSocket.Shutdown(SocketShutdown.Send);
+                }
+                catch (ObjectDisposedException)
+                { return; }
+                catch (Exception e)
+                {
+                }
+                //TokenAgrs.Dispose();
+                 TokenSocket.Close();
+            }
+        }
+        /// <summary>
+        /// 关闭该实时趋势连接对象并释放该对象资源
+        /// </summary>
+        public voID Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        public bool SendAsync(SocketAsyncEventArgs args)
+        {
+            return TokenSocket.SendAsync(args);
+        }
+        public bool DisconnectAsync(SocketAsyncEventArgs args)
+        {
+            if (TokenSocket.Connected == false) return false;
+            return TokenSocket.DisconnectAsync(args);
+        }
+        /// <summary>
+        /// 根据SocketID比较大小
+        /// </summary>
+        /// <param name="sToken"></param>
+        /// <returns></returns>
+        public int CompareTo(SocketToken sToken)
+        {
+            return this.TokenID.CompareTo(sToken.TokenID);
+        }
+        public int Send(SegmentOffset dataSegment)
+        {
+           return this.TokenSocket.Send(dataSegment.buffer,
+               dataSegment.offset,
+               dataSegment.size, 0);
+        }
+        /// <summary>
+        /// 释放JULY资源
+        /// </summary>
+        /// <param name="isDisposing"></param>
+        protected virtual voID Dispose(bool isDisposing)
+        {
+            if (_isDisposed) return;
+            if (isDisposing)
+            {
+                TokenAgrs.Dispose();
+                TokenSocket = null;
+                _isDisposed = true;
+            }
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using System.Threading;
+namespace Bystd.NetFactory
+{
+    using Base;
+    internal class SocketTokenManager<T>
+    {
+        private Queue<T> collection = null;
+        private LockParam lockParam = new LockParam();
+        private int capacity = 4;
+        public int Count
+        {
+            get { return collection.Count; }
+        }
+        public int Capacity { get { return capacity; } }
+        public SocketTokenManager(int capacity = 32)
+        {
+            this.capacity = capacity;
+            collection = new Queue<T>(capacity);
+        }
+        public T Get()
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                if (collection.Count > 0)
+                    return collection.Dequeue();
+                else return default(T);
+            }
+        }
+        public voID Set(T item)
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                collection.Enqueue(item);
+            }
+        }
+        public voID Clear()
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                collection.Clear();
+            }
+        }
+        public voID ClearToCloseToken()
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                while (collection.Count > 0)
+                {
+                    var token = collection.Dequeue() as SocketToken;
+                    if (token != null) token.Close();
+                }
+            }
+        }
+        public voID ClearToCloseArgs()
+        {
+            using (LockWait lwait = new LockWait(ref lockParam))
+            {
+                while (collection.Count > 0)
+                {
+                    var token = collection.Dequeue() as System.Net.Sockets.SocketAsyncEventArgs;
+                    if (token != null)
+                    {
+                        token.Dispose();
+                    }
+                }
+            }
+        }
+        public T GetEmptyWait(Func<int, bool> fun, bool isWaitingFor = false)
+        {
+            int retry = 1;
+            while (true)
+            {
+                var tArgs = Get();
+                if (tArgs != null) return tArgs;
+                if (isWaitingFor == false)
+                {
+                    if (retry > 16) break;
+                    ++retry;
+                }
+                var isContinue = fun(retry);
+                if (isContinue == false) break;
+                Thread.Sleep(1000 * retry);
+            }
+            return default(T);
+        }
+    }
+}
+using System;
+using System.Text;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+namespace Bystd.NetFactory.Tcp
+{
+    using Base;
+    using ProvIDers.Tcp;
+    public class TcpClientProvIDer : TcpSocket,IDisposable
+    {
+        #region variable
+        private bool _isDisposed = false;
+        private int bufferNumber = 8;
+        private Encoding encoding = Encoding.UTF8;
+        private int offsetNumber = 2;
+        private LockParam lParam = new LockParam();
+        private SocketTokenManager<SocketAsyncEventArgs> sendTokenManager = null;
+        private SocketBufferManager sBufferManager = null;
+        private AutoResetEvent mReset = new AutoResetEvent(false);
+        #endregion
+        #region properties
+        /// <summary>
+        /// 金制品加工尺寸检测发送回调处理
+        /// </summary>
+        public OnSentHandler SentCallback { get; set; }
+        /// <summary>
+        /// 接收数据回调处理
+        /// </summary>
+        public OnReceivedHandler RecievedCallback { get; set; }
+        /// <summary>
+        /// 控制泵运行接受数据回调，返回缓冲区和偏移量
+        /// </summary>
+        public OnReceivedSegmentHandler ReceivedOffsetCallback { get; set; }
+        /// <summary>
+        /// 断开连接回调处理
+        /// </summary>
+        public OnDisconnectedHandler DisconnectedCallback { get; set; }
+        /// <summary>
+        /// 控制泵停止连接回调处理
+        /// </summary>
+        public OnConnectedHandler ConnectedCallback { get; set; }
+        /// <summary>
+        /// 材料器运行是否连接状态
+        /// </summary>
+        public bool IsConnected
+        {
+            get { return isConnected; }
+        }
+        public int SendBufferPoolNumber { get { return sendTokenManager.Count; } }
+        public ChannelProvIDerType ChannelProvIDerState { get; private set; } = ChannelProvIDerType.Async;
+        #endregion
+        #region constructor
+        public voID Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+        protected virtual voID Dispose(bool isDisposing)
+        {
+            if (_isDisposed) return;
+            if (isDisposing)
+            {
+                DisposeSocketPool();
+                SafeClose();
+                _isDisposed = true;
+            }
+        }
+        private voID DisposeSocketPool()
+        {
+            sendTokenManager.Clear();
+            if (sBufferManager != null)
+            {
+                sBufferManager.Clear();
+            }
+        }
+        /// <summary>
+        /// 材料控制器停止构造
+        /// </summary>
+        /// <param name="chunkBufferSize">发送块缓冲区大小</param>
+        /// <param name="bufferNumber">过滤设置缓冲发送数</param>
+        public TcpClientProvIDer(int chunkBufferSize = 4096, int bufferNumber = 8)
+            :base(chunkBufferSize)
+        {
+            this.bufferNumber = bufferNumber;
+        }
+        #endregion
+        #region public method
+        /// <summary>
+        /// 统计显示异步建立连接
+        /// </summary>
+        /// <param name="port"></param>
+        /// <param name="ip"></param>
+        public voID Connect(int port, string ip)
+        {
+            try
+            {
+                if (!IsClose())
+                {
+                    Close();
+                }
+                isConnected = false;
+                ChannelProvIDerState = ChannelProvIDerType.Async;
+                using (LockWait lwait = new LockWait(ref lParam))
+                {
+                    CreatedConnectToBindArgs(port,ip);
+                }
+            }
+            catch (Exception)
+            {
+                Close();
+                throw;
+            }
+        }
+        /// <summary>
+        /// 起始时间异步等待连接返回结果
+        /// </summary>
+        /// <param name="port"></param>
+        /// <param name="ip"></param>
+        /// <returns></returns>
+        public bool ConnectTo(int port,string ip)
+        {
+            try
+            {
+                if (!IsClose())
+                {
+                    Close();
+                }
+                isConnected = false;
+                ChannelProvIDerState = ChannelProvIDerType.AsyncWait;
+                using (LockWait lwait = new LockWait(ref lParam))
+                {
+                   CreatedConnectToBindArgs(port,ip);
+                }
+                mReset.WaitOne(connectioTimeout);
+                isConnected = socket.Connected;
+                return isConnected;
+            }
+            catch (Exception ex)
+            {
+                Close();
+                throw ex;
+            }
+        }
+        /// <summary>
+        /// 截止时间同步连接
+        /// </summary>
+        /// <param name="port"></param>
+        /// <param name="ip"></param>
+        /// <returns></returns>
+        public bool ConnectSync(int port, string ip)
+        {
+            if (!IsClose())
+            {
+                Close();
+            }
+            isConnected = false;
+            ChannelProvIDerState = ChannelProvIDerType.Sync;
+            int retry = 3;
+            CreateTcpSocket(port, IPAddress.Parse(ip));
+            //using (LockWait lwait = new LockWait(ref lParam))
+            //{
+            //    CreatedConnectToBindArgs(port,ip);
+            //}
+            while (retry > 0)
+            {
+                try
+                {
+                    --retry;
+                    socket.Connect(ipEndPoint);
+                    isConnected = true;
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Close();
+                    if (retry <= 0) throw ex;
+                    Thread.Sleep(1000);
+                }
+            }
+            return false;
+        }
+        /// <summary>
+        /// 过滤更新根据偏移发送缓冲区数据
+        /// </summary>
+        /// <param name="buffer"></param>
+        /// <param name="offset"></param>
+        /// <param name="size"></param>
+        public bool Send(SegmentOffset sendSegment, bool waiting = true)
+        {
+            try
+            {
+                if (IsClose())
+                {
+                    Close();
+                    return false;
+                }
+                ArraySegment<byte>[] segItems = sBufferManager.BufferToSegments(sendSegment.buffer, sendSegment.offset, sendSegment.size);
+                bool isWillEvent = true;
+                foreach (var seg in segItems)
+                {
+                    var tArgs = GetSocketAsyncFromSendPool(waiting);
+                    if (tArgs == null)  return false;
+                    if (tArgs.UserToken == null)
+                        ((SocketToken)tArgs.UserToken).TokenSocket = socket;
+                    if (!sBufferManager.WriteBuffer(tArgs, seg.Array, seg.Offset, seg.Count))
+                    {
+                        sendTokenManager.Set(tArgs);
+                        throw new Exception(string.Format("发送缓冲区溢出...buffer block max size:{0}", sBufferManager.BlockSize));
+                    }
+                    if (IsClose())
+                    {
+                        Close();
+                        return false;
+                    }
+                    isWillEvent &= socket.SendAsync(tArgs);
+                    if (!isWillEvent)//can't trigger the io complated event to do
+                    {
+                        ProcessSentCallback(tArgs);
+                    }
+                    if (sendTokenManager.Count < (sendTokenManager.Capacity >> 2))
+                        Thread.Sleep(2);
+                }
+                return isWillEvent;
+            }
+            catch (Exception ex)
+            {
+                Close();
+                throw ex;
+            }
+        }
